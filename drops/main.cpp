@@ -10,15 +10,15 @@ using namespace std;
 int main()
 {
     vector<Drop> drops;
+    vector<float> result;
+
     ofstream myfile;
-    myfile.open("drops.txt");
+    myfile.open("test01.txt");
 
     for (int _ = 0; _ < 1000; _++)
     {
-        drops.push_back(Drop(9.f + ((double)rand() / (RAND_MAX)), 1.7f + 0.1 * ((double)rand() / (RAND_MAX)), 2.0f, 0.0064516f));
+        drops.push_back(Drop(9.f + ((double)rand() / (RAND_MAX)), 1.7f + 0.1 * ((double)rand() / (RAND_MAX)), 2.0f, 0.0064516f, 1.0 * ((double)rand() / (RAND_MAX)), 1.0 * ((double)rand() / (RAND_MAX))));
     }
-    // cout << drops[0].t_init << " " << drops[0].t_end << endl;
-    // cout << drops[2].t_init << " " << drops[2].t_end << endl;
 
     float t_init = 0.00f;
     float t_end = 1.f;
@@ -31,9 +31,17 @@ int main()
         {
             res += drops[i].sample_at(t);
         }
+        result.push_back(res);
+    }
 
-        myfile << res << endl;
-        cout << res << endl;
+    auto max_val = *std::max_element(result.begin(), result.end(), [](float a, float b)
+                                     { return std::abs(a) < std::abs(b); });
+
+    for (auto &elem : result)
+    {
+        elem /= max_val;
+        myfile << elem << endl;
+        cout << elem << endl;
     }
 
     myfile.close();
