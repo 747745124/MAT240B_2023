@@ -26,8 +26,10 @@ public:
     float m = 1.33;
     float q = 1.6;
     float f = 29;
+    float delta_1 = 0.1;
+    float delta_2 = 0.1;
 
-    Drop(float v_term, float H, float x_0, float a)
+    Drop(float v_term, float H, float x_0, float a, float delta_1, float delta_2)
     {
         this->v_term = v_term;
         this->H = H;
@@ -37,8 +39,8 @@ public:
         this->Rl = sqrtf((x_0 + a) * (x_0 + a) + H * H);
         this->t_init = this->Rs / c;
         this->t_end = this->Rl / c;
-        this->t2_start = this->t_init + 0.1;
-        this->t2_end = this->t_end + 0.2;
+        this->t2_start = this->t_init + delta_1;
+        this->t2_end = this->t_end + delta_2;
     };
 
     std::vector<float> res;
