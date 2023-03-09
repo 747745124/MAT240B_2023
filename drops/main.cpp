@@ -20,10 +20,10 @@ int main()
     // cout << drops[0].t_init << " " << drops[0].t_end << endl;
     // cout << drops[2].t_init << " " << drops[2].t_end << endl;
 
-    float t_init = 0.0077f;
-    float t_end = 0.0079f;
+    float t_init = 0.00f;
+    float t_end = 1.f;
 
-    for (float t = t_init; t < t_end; t += 0.0000001f)
+    for (float t = t_init; t < t_end; t += 1. / 44100.f)
     {
         float res = 0.0f;
 
@@ -31,6 +31,7 @@ int main()
         {
             res += drops[i].sample_at(t);
         }
+
         myfile << res << endl;
         cout << res << endl;
     }
