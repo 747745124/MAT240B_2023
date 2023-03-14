@@ -1,35 +1,24 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "./drops.hpp"
+#include <mutex>
+#include <thread>
+
 using namespace juce;
+std::mutex m;
 
 struct Raindrops : public AudioProcessor
 {
 
   AudioParameterFloat *gain;
-  AudioParameterFloat *density;
-  AudioParameterFloat *frequency;
+  AudioParameterFloat *randomness;
+  AudioParameterFloat *overall_frequency;
+  AudioParameterFloat *decay_frequency;
   AudioParameterFloat *start;
-  std::unique_ptr<Drops> drops_v1 = std::make_unique<Drops>(0.5, 10, 0.0, 4.0, 25.0, 2.0);
-  std::unique_ptr<Drops> drops_v2 = std::make_unique<Drops>(0.5, 1000, 0.0, 4.0, 25.0, 2.0);
-  float last_sample = drops_v1->next_sample();
+  AudioParameterFloat *density;
+  std::unique_ptr<Drops> drops = std::make_unique<Drops>(0.5, 10, 0.0, 4.0, 25.0, 2.0);
+  uint time_counter = 0;
 
-  struct ValueChangeListener : public AudioProcessorParameter::Listener
-  {
-    ValueChangeListener(Raindrops &drops) : drops_ref(drops) {}
-    // if value changed, recompute all the parameters
-    void parameterValueChanged(int parameterIndex, float newValue) override
-    {
-      drops_ref.drops_v1->recompute(0.5, newValue, 1.5, 2.0, 25.0, 2.0);
-    }
-    // this one does nothing
-    void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override
-    {
-      return;
-    };
-
-  private:
-    Raindrops &drops_ref;
-  };
+  float last_sample = drops->next_sample();
 
   Raindrops()
       : AudioProcessor(BusesProperties()
@@ -44,15 +33,28 @@ struct Raindrops : public AudioProcessor
                      {"density", 1}, "Density",
                      NormalisableRange<float>(10, 1000, 10.f), 10));
 
-    addParameter(frequency = new AudioParameterFloat(
+    addParameter(randomness = new AudioParameterFloat(
+                     {"randomness", 1}, "Randomness",
+                     NormalisableRange<float>(0.0, 1.0, 0.1f), 0.5));
+
+    addParameter(overall_frequency = new AudioParameterFloat(
                      {"frequency", 1}, "Frequency",
                      NormalisableRange<float>(0.5, 440.0, 0.5f), 1.0));
+
+    addParameter(decay_frequency = new AudioParameterFloat(
+                     {"decay_frequency", 1}, "Decay Frequency",
+                     NormalisableRange<float>(1.0, 100.0, 1.f), 25.));
 
     addParameter(start = new AudioParameterFloat(
                      {"start", 1}, "Start",
                      NormalisableRange<float>(0.0, 2.0, 0.1f), 1.0));
+  }
 
-    // gain->addListener(new ValueChangeListener(*this));
+  void recompute(float rnd, float ds, float d_freq)
+  {
+    m.lock();
+    drops = std::make_unique<Drops>(rnd, ds, 0.0, 4.0, d_freq, 2.0);
+    m.unlock();
   }
 
   /// this function handles the audio ///////////////////////////////////////
@@ -60,19 +62,37 @@ struct Raindrops : public AudioProcessor
   {
     auto left = buffer.getWritePointer(0, 0);
     auto right = buffer.getWritePointer(1, 0);
-    auto amount = (1000.f - density->get()) / 1000.f;
 
+    time_counter += 1;
     float sr = getSampleRate();
     auto start_sample = (int)(start->get() * sr);
-    auto end_sample = (int)(1.f / frequency->get() * sr) + start_sample;
+    auto end_sample = (int)(1.f / overall_frequency->get() * sr) + start_sample;
 
-    // drops->recompute(0.5, density->get(), 1.0, 2.0, 25.0, 2.0);
-    for (int i = 0; i < buffer.getNumSamples(); ++i)
+    // update every 1000 blocks
+    if (time_counter == 1000)
     {
-      left[i] = mix(drops_v2->next_sample(start_sample, end_sample), drops_v1->next_sample(start_sample, end_sample), amount) * dbtoa(gain->get());
-      left[i] = mix(left[i], last_sample, 0.5f);
-      right[i] = left[i];
-      last_sample = left[i];
+      time_counter = 0;
+      auto future = std::async(std::launch::async, &Raindrops::recompute, this, randomness->get(), density->get(), decay_frequency->get());
+
+      for (int i = 0; i < buffer.getNumSamples(); ++i)
+      {
+        left[i] = soft_clip(drops->next_sample(start_sample, end_sample) * dbtoa(gain->get()));
+        left[i] = mix(left[i], last_sample, 0.5f);
+        right[i] = left[i];
+        last_sample = left[i];
+      }
+
+      future.get();
+    }
+    else
+    {
+      for (int i = 0; i < buffer.getNumSamples(); ++i)
+      {
+        left[i] = soft_clip(drops->next_sample(start_sample, end_sample) * dbtoa(gain->get()));
+        left[i] = mix(left[i], last_sample, 0.5f);
+        right[i] = left[i];
+        last_sample = left[i];
+      }
     }
   }
 
@@ -80,14 +100,18 @@ struct Raindrops : public AudioProcessor
   void prepareToPlay(double, int) override
   {
   }
-  void releaseResources() override {}
+  void releaseResources() override
+  {
+  }
 
   /// maintaining persistant state on suspend ///////////////////////////////
   void getStateInformation(MemoryBlock &destData) override
   {
     MemoryOutputStream(destData, true).writeFloat(*gain);
     MemoryOutputStream(destData, true).writeFloat(*density);
-    MemoryOutputStream(destData, true).writeFloat(*frequency);
+    MemoryOutputStream(destData, true).writeFloat(*overall_frequency);
+    MemoryOutputStream(destData, true).writeFloat(*randomness);
+    MemoryOutputStream(destData, true).writeFloat(*decay_frequency);
     MemoryOutputStream(destData, true).writeFloat(*start);
     /// add parameters here /////////////////////////////////////////////////
   }
@@ -100,10 +124,16 @@ struct Raindrops : public AudioProcessor
     density->setValueNotifyingHost(
         MemoryInputStream(data, static_cast<size_t>(sizeInBytes), false)
             .readFloat());
-    frequency->setValueNotifyingHost(
+    overall_frequency->setValueNotifyingHost(
         MemoryInputStream(data, static_cast<size_t>(sizeInBytes), false)
             .readFloat());
     start->setValueNotifyingHost(
+        MemoryInputStream(data, static_cast<size_t>(sizeInBytes), false)
+            .readFloat());
+    decay_frequency->setValueNotifyingHost(
+        MemoryInputStream(data, static_cast<size_t>(sizeInBytes), false)
+            .readFloat());
+    randomness->setValueNotifyingHost(
         MemoryInputStream(data, static_cast<size_t>(sizeInBytes), false)
             .readFloat());
     /// add parameters here /////////////////////////////////////////////////
@@ -148,3 +178,35 @@ AudioProcessor *JUCE_CALLTYPE createPluginFilter()
 {
   return new Raindrops();
 }
+
+// struct ValueChangeListener : public AudioProcessorParameter::Listener
+// {
+//   ValueChangeListener(Raindrops &drops) : drops_ref(drops) {}
+//   // if value changed, recompute all the parameters
+//   void parameterValueChanged(int parameterIndex, float newValue) override
+//   {
+//     drops_ref.drops_v1->recompute(0.5, newValue, 1.5, 2.0, 25.0, 2.0);
+//   }
+//   // this one does nothing
+//   void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override
+//   {
+//     return;
+//   };
+
+// private:
+//   Raindrops &drops_ref;
+// };
+
+// class DensityParam : public AudioParameterFloat
+// {
+// public:
+//   DensityParam(const ParameterID &paramID, const String &name,
+//                NormalisableRange<float> normalisableRange,
+//                float defaultValue)
+//       : AudioParameterFloat(paramID, name, normalisableRange, defaultValue){};
+
+//   void valueChanged(float new_value) override
+//   {
+//     std::cout << "value changed" << std::endl;
+//   }
+// };

@@ -5,6 +5,15 @@
 #include <algorithm>
 #include <cmath>
 
+float soft_clip(float x)
+{
+    if (x > 1.f)
+        return 1.f;
+    if (x < -1.f)
+        return -1.f;
+    return 3.f * x / 2.f - x * x * x / 2.f;
+}
+
 template <typename T>
 T dbtoa(T db)
 {
