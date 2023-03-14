@@ -1,0 +1,3 @@
+[submodule "Drops_JUCE/JUCE"]
+	path = Drops_JUCE/JUCE
+	url = https://github.com/juce-framework/JUCE
