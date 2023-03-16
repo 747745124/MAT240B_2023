@@ -1,5 +1,6 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "./drops.hpp"
+#include "./simplified_drops.hpp"
 #include <mutex>
 #include <thread>
 
@@ -16,9 +17,9 @@ struct Raindrops : public AudioProcessor
   AudioParameterFloat *start;
   AudioParameterFloat *density;
   std::unique_ptr<Drops> drops = std::make_unique<Drops>(0.5, 10, 0.0, 4.0, 25.0, 2.0);
+  std::unique_ptr<Drops_Simplified> drops_simplified = std::make_unique<Drops_Simplified>(0.5, 100, 25.0, 2.0);
   uint time_counter = 0;
-
-  float last_sample = drops->next_sample();
+  float running_max = -1e3;
 
   Raindrops()
       : AudioProcessor(BusesProperties()
@@ -50,49 +51,40 @@ struct Raindrops : public AudioProcessor
                      NormalisableRange<float>(0.0, 2.0, 0.1f), 1.0));
   }
 
-  void recompute(float rnd, float ds, float d_freq)
-  {
-    m.lock();
-    drops = std::make_unique<Drops>(rnd, ds, 0.0, 4.0, d_freq, 2.0);
-    m.unlock();
-  }
-
   /// this function handles the audio ///////////////////////////////////////
   void processBlock(AudioBuffer<float> &buffer, MidiBuffer &) override
   {
     auto left = buffer.getWritePointer(0, 0);
     auto right = buffer.getWritePointer(1, 0);
 
-    time_counter += 1;
+    drops_simplified = std::make_unique<Drops_Simplified>(randomness->get(), density->get(), decay_frequency->get());
     float sr = getSampleRate();
-    auto start_sample = (int)(start->get() * sr);
-    auto end_sample = (int)(1.f / overall_frequency->get() * sr) + start_sample;
 
-    // update every 1000 blocks
-    if (time_counter == 1000)
+    auto start_time = start->get();
+    auto end_time = 1.f / overall_frequency->get() + start_time;
+
+    for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
-      time_counter = 0;
-      auto future = std::async(std::launch::async, &Raindrops::recompute, this, randomness->get(), density->get(), decay_frequency->get());
-
-      for (int i = 0; i < buffer.getNumSamples(); ++i)
+      if (time_counter >= end_time)
       {
-        left[i] = soft_clip(drops->next_sample(start_sample, end_sample) * dbtoa(gain->get()));
-        left[i] = mix(left[i], last_sample, 0.5f);
-        right[i] = left[i];
-        last_sample = left[i];
+        time_counter = start_time;
       }
 
-      future.get();
-    }
-    else
-    {
-      for (int i = 0; i < buffer.getNumSamples(); ++i)
+      float res = 0.0f;
+      for (int i = 0; i < drops_simplified->drops.size(); i++)
       {
-        left[i] = soft_clip(drops->next_sample(start_sample, end_sample) * dbtoa(gain->get()));
-        left[i] = mix(left[i], last_sample, 0.5f);
-        right[i] = left[i];
-        last_sample = left[i];
+        res += drops_simplified->drops[i].sample_at_simplified(time_counter);
       }
+
+      if (fabs(res) > fabs(running_max))
+      {
+        running_max = res;
+      }
+
+      left[i] = res * dbtoa(gain->get()) / fabs(running_max);
+      right[i] = left[i];
+
+      time_counter += 1.0 / sr;
     }
   }
 

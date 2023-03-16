@@ -1,5 +1,5 @@
 #include "drop.hpp"
-
+#pragma once
 class Drops
 {
 public:
