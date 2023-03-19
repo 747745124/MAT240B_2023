@@ -37,6 +37,20 @@ public:
         this->f = f;
     }
 
+    void reset(float end_time, float interval_coeff, float freq_coeff)
+    {
+        this->t_init = rand_num_new(end_time);
+        this->delta_t_1 = interval_coeff * rand_num_new(0.002);
+        this->delta_t_2 = 0.002 + interval_coeff * rand_num_new(0.004);
+        this->delta_t_3 = 0.006 + interval_coeff * rand_num_new(0.006);
+        this->A0 = 1.0f;
+        this->A1 = 1.2f;
+        this->k = 3.0f;
+        this->m = 3 + freq_coeff * rand_num_new(12);
+        this->f = 1000 + freq_coeff * rand_num_new(1000);
+        this->time = 0.f;
+    };
+
     float operator()()
     {
         float value = 0.f;

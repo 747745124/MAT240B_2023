@@ -41,7 +41,7 @@ struct Raindrops : public AudioProcessor
 
     addParameter(density = new AudioParameterFloat(
                      {"density", 1}, "Density",
-                     NormalisableRange<float>(1.f, 180.f, 1.f), 10.f));
+                     NormalisableRange<float>(1.f, 1000.f, 1.f), 10.f));
 
     addParameter(freq_coeff = new AudioParameterFloat(
                      {"randomness", 1}, "Freq Coeff",
@@ -70,12 +70,16 @@ struct Raindrops : public AudioProcessor
     auto left = buffer.getWritePointer(0, 0);
     auto right = buffer.getWritePointer(1, 0);
 
-    drops = std::make_unique<Drops_v2>(freq_coeff->get(), density->get(), 1.0f, single_drop_interval->get());
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
 
       float res = 0.0f;
       res = drops->operator()();
+      for (int k = 0; k < density->get(); ++k)
+      {
+        if (drops->drops[k].time > 1.012f)
+          drops->drops[k].reset(1.0f, single_drop_interval->get(), freq_coeff->get());
+      }
 
       if (fabs(res) > fabs(running_max))
       {
