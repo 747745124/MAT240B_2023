@@ -9,6 +9,7 @@
 # information can be found in the CMake docs.
 
 cmake_minimum_required(VERSION 3.15)
+set(CMAKE_CXX_STANDARD 17)
 
 # The top-level CMakeLists.txt file for a project must contain a literal, direct call to the
 # `project()` command. `project()` sets up some helpful variables that describe source/binary
@@ -69,7 +70,8 @@ juce_add_plugin(Drops
 # CMake command.
 target_sources(Drops
     PRIVATE
-    main.cpp)
+    main.cpp
+)
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer
 # project, these might be passed in the 'Preprocessor Definitions' field. JUCE modules also make use

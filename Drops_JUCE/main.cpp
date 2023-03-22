@@ -40,7 +40,7 @@ struct Raindrops : public AudioProcessor
                      NormalisableRange<float>(-65.f, -1.f, 0.01f), -65.f));
     addParameter(density = new AudioParameterFloat(
                      {"density", 1}, "Density",
-                     NormalisableRange<float>(1.f, 200.f, 1.f), 10.f));
+                     NormalisableRange<float>(1.f, 400.f, 1.f), 10.f));
     addParameter(freq_coeff = new AudioParameterFloat(
                      {"randomness", 1}, "Freq Coeff",
                      NormalisableRange<float>(0.1f, 4.0f, 0.1f), 4.0f));
