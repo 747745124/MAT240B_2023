@@ -16,6 +16,15 @@ T dbtoa(T db)
     return pow(T(10), db / T(20));
 }
 
+// random number from start_time to end_time
+float rand_num_new(float start_time, float end_time)
+{
+    std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    std::uniform_real_distribution<> dist(start_time, end_time);
+    return dist(gen);
+}
+
 float mix(float a, float b, float t)
 {
     return a * (1 - t) + b * t;

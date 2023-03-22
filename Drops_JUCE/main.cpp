@@ -16,6 +16,7 @@ struct Raindrops : public AudioProcessor
   SingleChannelSampleFifo<BlockType> leftChannelFifo{Channel::Left};
   SingleChannelSampleFifo<BlockType> rightChannelFifo{Channel::Right};
 
+  AudioParameterFloat *noise_level;
   AudioParameterFloat *gain;
   AudioParameterFloat *freq_coeff;
   AudioParameterFloat *density;
@@ -27,7 +28,6 @@ struct Raindrops : public AudioProcessor
   AudioParameterFloat *LPF_freq;
 
   std::unique_ptr<Drops_v2> drops = std::make_unique<Drops_v2>(0.5, 100, 1.0f);
-  float time_counter = 0;
   float running_max = -20.f;
 
   Raindrops()
@@ -38,18 +38,18 @@ struct Raindrops : public AudioProcessor
     addParameter(gain = new AudioParameterFloat(
                      {"gain", 1}, "Gain",
                      NormalisableRange<float>(-65.f, -1.f, 0.01f), -65.f));
-
     addParameter(density = new AudioParameterFloat(
                      {"density", 1}, "Density",
-                     NormalisableRange<float>(1.f, 1000.f, 1.f), 10.f));
-
+                     NormalisableRange<float>(1.f, 200.f, 1.f), 10.f));
     addParameter(freq_coeff = new AudioParameterFloat(
                      {"randomness", 1}, "Freq Coeff",
                      NormalisableRange<float>(0.1f, 4.0f, 0.1f), 4.0f));
-
     addParameter(single_drop_interval = new AudioParameterFloat(
                      {"interval_coeff", 1}, "Interval Coeff",
                      NormalisableRange<float>(0.1f, 4.0f, 0.1f), 1.0f));
+    addParameter(noise_level = new AudioParameterFloat(
+                     {"noise_level", 1}, "Noise Level",
+                     NormalisableRange<float>(0.00f, 0.01f, 0.001f), 0.0f));
     addParameter(HPF_freq = new AudioParameterFloat(
                      {"HPF Freq", 1}, "HPF Freq",
                      NormalisableRange<float>(1000.f, 20000.0f, 100.f), 100.0f));
@@ -86,10 +86,9 @@ struct Raindrops : public AudioProcessor
         running_max = res;
       }
 
-      left[i] = soft_clip(res * dbtoa(gain->get()) / fabs(running_max));
+      float noise = rand_num_new(-1.f, 1.f);
+      left[i] = soft_clip(res * dbtoa(gain->get()) / fabs(running_max) + noise_level->get() * noise);
       right[i] = left[i];
-
-      time_counter += 1.0f / getSampleRate();
     }
 
     // 1.wrap the buffer with audio block
